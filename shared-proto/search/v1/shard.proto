@@ -1,0 +1,77 @@
+syntax = "proto3";
+
+package search.v1;
+
+option go_package = "github.com/ayushpramanik/distributed-search-engine/shared-proto/gen/go/search/v1";
+option optimize_for = SPEED;
+
+// ── Messages ─────────────────────────────────────────────────────────────────
+
+message Document {
+  string id        = 1;
+  string title     = 2;
+  string content   = 3;
+  map<string, string> metadata = 4;
+  int64  timestamp = 5;
+}
+
+message SearchResult {
+  string id      = 1;
+  string title   = 2;
+  string snippet = 3;
+  double score   = 4;
+  string shard_id = 5;
+}
+
+message IndexDocumentRequest {
+  Document document = 1;
+}
+
+message IndexDocumentResponse {
+  bool   success  = 1;
+  string message  = 2;
+  string shard_id = 3;
+}
+
+message SearchRequest {
+  string query             = 1;
+  int32  page              = 2;
+  int32  page_size         = 3;
+  string ranking_algorithm = 4;  // "bm25" | "tfidf"
+}
+
+message SearchResponse {
+  repeated SearchResult results    = 1;
+  int32                 total_hits = 2;
+  int64                 latency_us = 3;
+  string                shard_id   = 4;
+}
+
+message DeleteDocumentRequest {
+  string id = 1;
+}
+
+message DeleteDocumentResponse {
+  bool   success = 1;
+  string message = 2;
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string shard_id         = 1;
+  bool   healthy          = 2;
+  int64  document_count   = 3;
+  int64  index_size_bytes = 4;
+  double cpu_usage        = 5;
+  double memory_usage_mb  = 6;
+}
+
+// ── Services ──────────────────────────────────────────────────────────────────
+
+service ShardService {
+  rpc IndexDocument(IndexDocumentRequest) returns (IndexDocumentResponse);
+  rpc Search(SearchRequest)               returns (SearchResponse);
+  rpc DeleteDocument(DeleteDocumentRequest) returns (DeleteDocumentResponse);
+  rpc HealthCheck(HealthCheckRequest)     returns (HealthCheckResponse);
+}

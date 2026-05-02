@@ -1,0 +1,64 @@
+# Build outputs
+build/
+dist/
+out/
+bin/
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+_deps/
+*.cmake
+!cmake/
+!CMakeLists.txt
+
+# Go
+vendor/
+*.test
+*.out
+coverage.txt
+go.sum.bak
+
+# Node / Next.js
+node_modules/
+.next/
+.vercel/
+*.tsbuildinfo
+frontend/.env.local
+frontend/.env.production
+
+# Docker
+*.tar
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# Redis dump
+dump.rdb
+
+# Profiling
+*.prof
+*.pprof
+
+# Grafana data
+monitoring/grafana/data/
+
+# k6 results
+load-testing/results/
