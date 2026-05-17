@@ -1,0 +1,171 @@
+version: '3.9'
+
+x-shard-base: &shard-base
+  build:
+    context: ./shard-node
+    dockerfile: Dockerfile
+  restart: unless-stopped
+  networks:
+    - search-net
+  healthcheck:
+    test: ["CMD", "sh", "-c", "wget -qO- http://localhost:8080/v1/health || exit 1"]
+    interval: 10s
+    timeout: 5s
+    retries: 3
+    start_period: 20s
+
+services:
+  # ── Shard nodes (C++ inverted index) ──────────────────────────────────────
+
+  shard-1:
+    <<: *shard-base
+    hostname: shard-1
+    environment:
+      SHARD_ID: shard-1
+      HTTP_PORT: "8080"
+      WORKER_THREADS: "4"
+    ports:
+      - "18081:8080"
+
+  shard-2:
+    <<: *shard-base
+    hostname: shard-2
+    environment:
+      SHARD_ID: shard-2
+      HTTP_PORT: "8080"
+      WORKER_THREADS: "4"
+    ports:
+      - "18082:8080"
+
+  shard-3:
+    <<: *shard-base
+    hostname: shard-3
+    environment:
+      SHARD_ID: shard-3
+      HTTP_PORT: "8080"
+      WORKER_THREADS: "4"
+    ports:
+      - "18083:8080"
+
+  # ── Query coordinator (Go) ─────────────────────────────────────────────────
+
+  coordinator:
+    build:
+      context: .
+      dockerfile: query-coordinator/Dockerfile
+    restart: unless-stopped
+    hostname: coordinator
+    environment:
+      HTTP_PORT: "9090"
+      SHARD_ADDRESSES: "http://shard-1:8080,http://shard-2:8080,http://shard-3:8080"
+    ports:
+      - "9090:9090"
+    depends_on:
+      shard-1:
+        condition: service_healthy
+      shard-2:
+        condition: service_healthy
+      shard-3:
+        condition: service_healthy
+    networks:
+      - search-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -qO- http://localhost:9090/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ── API gateway (Go) ───────────────────────────────────────────────────────
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: api-gateway/Dockerfile
+    restart: unless-stopped
+    hostname: api-gateway
+    environment:
+      HTTP_PORT: "3001"
+      COORDINATOR_ADDRESS: "http://coordinator:9090"
+      REDIS_ADDRESS: "redis:6379"
+    ports:
+      - "3001:3001"
+    depends_on:
+      coordinator:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - search-net
+
+  # ── Frontend (Next.js) ─────────────────────────────────────────────────────
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:3001"
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    networks:
+      - search-net
+
+  # ── Redis (query cache) ────────────────────────────────────────────────────
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    hostname: redis
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save ""
+    ports:
+      - "6379:6379"
+    networks:
+      - search-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+
+  # ── Prometheus ─────────────────────────────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:v2.47.2
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+    ports:
+      - "9091:9090"
+    networks:
+      - search-net
+
+  # ── Grafana ────────────────────────────────────────────────────────────────
+
+  grafana:
+    image: grafana/grafana:10.2.2
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3100:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - search-net
+
+networks:
+  search-net:
+    driver: bridge

@@ -9,14 +9,13 @@ bin/
 *.dylib
 *.exe
 
-# CMake
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-Makefile
+# CMake (only inside build directories)
+**/CMakeCache.txt
+**/CMakeFiles/
+**/cmake_install.cmake
+**/cmake-build/
 _deps/
-*.cmake
-!cmake/
+!Makefile
 !CMakeLists.txt
 
 # Go
